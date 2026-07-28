@@ -58,6 +58,8 @@
 #include <boot_device.h>
 #include <sdhci_msm.h>
 
+#include "target/led.h"
+
 #if LONG_PRESS_POWER_ON
 #include <shutdown_detect.h>
 #endif
@@ -358,6 +360,38 @@ static void set_ebi2_config(void)
 	tlmm_set_pull_ctrl(ebi2_pull_cfg, ARRAY_SIZE(ebi2_pull_cfg));
 
 }
+
+
+/* I2C command byte sequence array for LV5216 LED Driver */
+static struct lv5216_reg lv5216_init_buf[]  = { { 0x02, 0x08 } };
+static struct lv5216_reg lv5216_color_cmds[]  = { { 0x02, 0x0C }, { 0x02, 0x09 },{ 0x02, 0x0A },
+						{ 0x02, 0x0D },{ 0x02, 0x0E },{ 0x02, 0x0B },{ 0x02, 0x0F }};
+int lv5216_set_led_rgb_mode(uint32_t enable, uint32_t color_mode)
+{
+    int ret = 0;
+
+
+    /* Initialize LV5216 hardware if required */
+    ret = lv5216_init();
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Send reset/off preamble cmd (turns off LED on and off based on enable bit) */
+    if (!lv5216_send(lv5216_init_buf, 1)) {
+        return -20;
+    }
+
+    /* If enabled, send the specific color register payload */
+    if (enable == 1) {
+        if (!lv5216_send(&lv5216_color_cmds[color_mode], 1)) {
+            return -20;
+        }
+    }
+
+    return 0;
+}
+
 void target_init(void)
 {
 #if VERIFIED_BOOT || VERIFIED_BOOT_2
@@ -409,6 +443,9 @@ void target_init(void)
 #if LONG_PRESS_POWER_ON
 		shutdown_detect();
 #endif
+
+	/*Enable status LED, set to blue*/
+	lv5216_set_led_rgb_mode(1, 4);
 
 #if PON_VIB_SUPPORT
 
@@ -753,6 +790,8 @@ void target_uninit(void)
 	/* wait for the vibrator timer is expried */
 	wait_vib_timeout();
 #endif
+	/*Disable status LED, pattern is 7*/
+	lv5216_set_led_rgb_mode(0, 7);
 
 	if (platform_boot_dev_isemmc())
 	{

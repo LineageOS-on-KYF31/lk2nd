@@ -43,6 +43,11 @@
 #include <platform/timer.h>
 #include <target/display.h>
 #include <regulator.h>
+#include <i2c_qup.h>
+#include <blsp_qup.h>
+#include <mipi_dsi_i2c.h>
+
+#include "target/led.h"
 
 #include "include/panel.h"
 #include "include/display_resource.h"
@@ -59,8 +64,9 @@
 /*---------------------------------------------------------------------------*/
 /* GPIO configuration                                                        */
 /*---------------------------------------------------------------------------*/
+/*pin_source, pin_id, pin_strength, pin_direction, pin_pull, pin_state*/
 static struct gpio_pin reset_gpio = {
-  "msmgpio", 25, 3, 1, 0, 1
+  "msmgpio", 2, 3, 1, 0, 1
 };
 
 static struct gpio_pin enable_gpio = {
@@ -211,64 +217,128 @@ static uint32_t dsi_pll_enable_seq_8909(uint32_t pll_base)
 	return pll_locked;
 }
 
+#define LV5216_I2C_SLAVE_ADDR   0x74
+#define BL_GPIO_EN              0   /* GPIO used to enable the backlight IC */
+
+static struct qup_i2c_dev *lv5216_i2c_dev = NULL;
+static uint8_t lv5216_initialized = 0;
+
+/* Register/value pairs written on init */
+struct lv5216_reg lv5216_init_regs[] = {
+    { 0x01, 0x00 }, { 0x02, 0x08 }, { 0x03, 0x48 }, { 0x06, 0x0A },
+    { 0x07, 0x08 }, { 0x08, 0x0A }, { 0x09, 0x9F }, { 0x0A, 0x02 },
+    { 0x0B, 0x80 }, { 0x0C, 0x00 }, { 0x0D, 0x00 }, { 0x0E, 0x00 },
+    { 0x0F, 0x00 }, { 0x10, 0x00 }, { 0x11, 0x00 }, { 0x12, 0x00 },
+    { 0x13, 0x00 }, { 0x14, 0x07 }, { 0x16, 0x07 }, { 0x17, 0x07 },
+    { 0x18, 0x07 }, { 0x19, 0x07 }, { 0x1A, 0x1F }, { 0x1B, 0x1F },
+    { 0x1C, 0x1F }, { 0x1D, 0x1F }, { 0x1E, 0x1F }, { 0x1F, 0x37 },
+    { 0x20, 0x47 }, { 0x21, 0x47 }, { 0x22, 0x67 }, { 0x23, 0x67 },
+    { 0x24, 0x67 }, { 0x25, 0x67 }, { 0x26, 0xAA }, { 0x27, 0xB8 },
+    { 0x00, 0x81 }  /* Power Reg */
+};
+#define LV5216_INIT_COUNT (sizeof(lv5216_init_regs) / sizeof(lv5216_init_regs[0]))
+
+struct lv5216_reg lv5216_backlight_on[]  = { { 0x01, 0x1F } };
+struct lv5216_reg lv5216_backlight_off[] = { { 0x01, 0x00 } };
+
+/*
+ * Sends `count` register/value pairs over I2C to the LV5216.
+ * Returns 1 on success, 0 on failure.
+ */
+int lv5216_send(struct lv5216_reg *buf, int count)
+{
+    int i;
+    int retries;
+    int ret;
+    struct i2c_msg msg;
+    uint8_t payload[2];
+
+    for (i = 0; i < count; i++) {
+        payload[0] = buf[i].reg;
+        payload[1] = buf[i].val;
+
+        msg.addr  = LV5216_I2C_SLAVE_ADDR;
+        msg.flags = 0;
+        msg.len   = 2;
+        msg.buf   = payload;
+
+        retries = 5;
+        do {
+            ret = qup_i2c_xfer(lv5216_i2c_dev, &msg, 1);
+            if (ret == 1)
+                break;
+            retries--;
+        } while (retries > 0);
+
+        if (retries == 0)
+            return 0;
+    }
+
+    return 1;
+}
+
+int lv5216_init(void)
+{
+    if (lv5216_initialized)
+        return 0;
+
+    gpio_tlmm_config(0, 0, 1, 0, 0, 1);
+    gpio_set(0, 0);
+    udelay(50);
+    gpio_set(0, 2);
+    udelay(50);
+
+    if (!lv5216_i2c_dev) {
+        lv5216_i2c_dev = qup_blsp_i2c_init(BLSP_ID_1, QUP_ID_0,
+                                            340000,
+                                            19200000);
+        if (lv5216_i2c_dev == NULL)
+            return -1;
+    }
+
+    if (!lv5216_send(lv5216_init_regs, LV5216_INIT_COUNT))
+        return -1;
+
+    udelay(2000);
+    lv5216_initialized = 1;
+    return 0;
+}
+
+/*
+ * Matches the prototype in gcdb_display.h:
+ * int target_backlight_ctrl(struct backlight *bl, uint8_t enable);
+ */
 int target_backlight_ctrl(struct backlight *bl, uint8_t enable)
 {
-	uint32_t hw_id = board_hardware_id();
-	uint32_t platform = board_platform_id();
-	uint32_t platform_subtype = board_hardware_subtype();
+	int ret;
+	struct lv5216_reg *cmd;
+
 
 	if (bl->bl_interface_type == BL_DCS)
 		return 0;
-
-	if (!(((HW_PLATFORM_SUBTYPE_8909_PM660 == platform_subtype) ||
-		(HW_PLATFORM_SUBTYPE_8909_PM660_V1 == platform_subtype) ||
-		(HW_PLATFORM_SUBTYPE_8909_COMPAL_ALPHA == platform_subtype)) &&
-		((MSM8909W == platform) || (APQ8009W == platform)) &&
-		(HW_PLATFORM_MTP == hw_id))) {
-		struct pm8x41_mpp mpp;
-		struct board_pmic_data pmic_info;
-		int rc;
-
-		board_pmic_info(&pmic_info, 1);
-		if (pmic_info.pmic_version == PM8916_VER)
-			mpp.base = PM8x41_MMP4_BASE;
-		else
-			mpp.base = PM8x41_MMP2_BASE;
-
-		mpp.vin = MPP_VIN0;
-		if (enable) {
-			pm_pwm_enable(false);
-			rc = pm_pwm_config(PWM_DUTY_US, PWM_PERIOD_US);
-			if (rc < 0)
-				mpp.mode = MPP_HIGH;
-			else {
-				mpp.mode = MPP_DTEST1;
-				pm_pwm_enable(true);
-			}
-			pm8x41_config_output_mpp(&mpp);
-			pm8x41_enable_mpp(&mpp, MPP_ENABLE);
-		} else {
-			pm_pwm_enable(false);
-			pm8x41_enable_mpp(&mpp, MPP_DISABLE);
-		}
-		mdelay(20);
+	
+	dprintf(CRITICAL, "backlight ctrl: enable=%d\n", enable);
+	/* Run initialization sequence first */
+	ret = lv5216_init();
+	if (ret != 0) {
+		dprintf(CRITICAL, "lv5216: Initialization failed, skipping backlight ctrl\n");
+		return -1;
 	}
+
+	/* Select payload based on state */
 	if (enable) {
-		gpio_tlmm_config(bkl_gpio.pin_id, 0,
-			bkl_gpio.pin_direction, bkl_gpio.pin_pull,
-			bkl_gpio.pin_strength, bkl_gpio.pin_state);
-			gpio_set(bkl_gpio.pin_id, 2);
-
-		if (HW_PLATFORM_SUBTYPE_8909_PM660_V1 == platform_subtype) {
-			gpio_tlmm_config(spi_bkl_gpio.pin_id, 0,
-				spi_bkl_gpio.pin_direction,
-				spi_bkl_gpio.pin_pull,
-				spi_bkl_gpio.pin_strength,
-				spi_bkl_gpio.pin_state);
-			gpio_set(spi_bkl_gpio.pin_id, 2);
-		}
+		cmd = lv5216_backlight_on;
+	} else {
+		cmd = lv5216_backlight_off;
 	}
-
+	dprintf(CRITICAL, "sending lv5216_backlight_on\n");
+	/* Send single (size 1) command over I2C */
+	ret = lv5216_send(cmd, 1);
+	if (ret == 0) {
+		dprintf(CRITICAL, "lv5216: Failed to send backlight %s command\n", 
+		        enable ? "ON" : "OFF");
+	}
+	dprintf(CRITICAL, "sent lv5216_backlight_on\n");
 	return 0;
 }
 
@@ -397,12 +467,11 @@ int target_ldo_ctrl(uint8_t enable, struct msm_panel_info *pinfo)
 			regulator_enable(REG_LDO11 | REG_LDO18);
 		}
 		else
-			regulator_enable(REG_LDO2 | REG_LDO6 | REG_LDO17);
+			regulator_enable(REG_LDO2 | REG_LDO15 | REG_LDO17);
 	}
 
 	return NO_ERROR;
 }
-
 int target_dsi_phy_config(struct mdss_dsi_phy_ctrl *phy_db)
 {
 	memcpy(phy_db->regulator, panel_regulator_settings, REGULATOR_SIZE);
