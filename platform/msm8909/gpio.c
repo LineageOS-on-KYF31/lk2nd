@@ -87,6 +87,15 @@ void gpio_config_blsp_i2c(uint8_t blsp_id, uint8_t qup_id)
 {
 	if(blsp_id == BLSP_ID_1) {
 		switch (qup_id) {
+			case QUP_ID_0:
+				/* configure I2C SDA gpio */
+				gpio_tlmm_config(6, 3, GPIO_OUTPUT, GPIO_NO_PULL,
+					GPIO_8MA, GPIO_DISABLE);
+
+				/* configure I2C SCL gpio */
+				gpio_tlmm_config(7, 3, GPIO_OUTPUT, GPIO_NO_PULL,
+					GPIO_8MA, GPIO_DISABLE);
+			break;
 			case QUP_ID_1:
 				/* configure I2C SDA gpio */
 				gpio_tlmm_config(6, 3, GPIO_OUTPUT, GPIO_NO_PULL,
