@@ -120,6 +120,22 @@ static uint32_t ldo12[][11]=
 	},
 };
 
+static uint32_t ldo15[][11]=
+{
+	{
+		LDOA_RES_TYPE, 15,
+		KEY_SOFTWARE_ENABLE, 4, GENERIC_DISABLE,
+		KEY_MICRO_VOLT, 4, 0,
+		KEY_CURRENT, 4, 0,
+	},
+
+	{
+		LDOA_RES_TYPE, 15,
+		KEY_SOFTWARE_ENABLE, 4, GENERIC_ENABLE,
+		KEY_MICRO_VOLT, 4, 2800000,
+		KEY_CURRENT, 4, 40,
+	},
+};
 
 static uint32_t ldo17[][11]=
 {
@@ -175,6 +191,10 @@ void regulator_enable(uint32_t enable)
 
 	if (enable & REG_LDO12)
 		rpm_send_data(&ldo12[GENERIC_ENABLE][0], 36, RPM_REQUEST_TYPE);
+
+
+	if (enable & REG_LDO15)
+		rpm_send_data(&ldo15[GENERIC_ENABLE][0], 36, RPM_REQUEST_TYPE);
 
 	if (enable & REG_LDO18)
 		rpm_send_data(&ldo18[GENERIC_ENABLE][0], 36, RPM_REQUEST_TYPE);
