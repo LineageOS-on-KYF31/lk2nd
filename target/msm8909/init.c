@@ -439,7 +439,7 @@ void target_init(void)
 		update_ptable_names();
 		flash_set_ptable(&flash_ptable);
 	}
-
+		mmc_clear_mmc_wp();
 #if LONG_PRESS_POWER_ON
 		shutdown_detect();
 #endif

@@ -643,6 +643,40 @@ void mmc_read_partition_table(uint8_t arg)
 	}
 }
 
+/**
+ * mmc_clear_mmc_wp - Clears write protect bit on the entire eMMC.
+ *
+ * Returns: 0 on success, non-zero on failure.
+ */
+uint32_t mmc_clear_mmc_wp(void)
+{
+    struct mmc_device *dev = NULL;
+
+    dev = (struct mmc_device *)target_mmc_device();
+    if (!dev) {
+        dprintf(CRITICAL, "Error: Failed to get MMC device handle\n");
+        return 1;
+    }
+
+    if (!platform_boot_dev_isemmc()) {
+        dprintf(CRITICAL, "Error: Boot device is not eMMC\n");
+        return 1;
+    }
+
+    if (dev->card.capacity == 0) {
+        dprintf(CRITICAL, "Error: Invalid or zero MMC capacity\n");
+        return 1;
+    }
+
+    dprintf(INFO, "Clearing WP on entire eMMC (%llu bytes)...\n", dev->card.capacity);
+
+    /* 
+     * Pass block offset 0, dev->card.capacity directly (in bytes), 
+     * and set_clr = 0.
+     */
+    return mmc_set_clr_power_on_wp_user(dev, 0, dev->card.capacity, 0);
+}
+
 uint32_t mmc_write_protect(const char *ptn_name, int set_clr)
 {
 	void *dev = NULL;
