@@ -2369,6 +2369,7 @@ uint32_t mmc_set_clr_power_on_wp_user(struct mmc_device *dev, uint32_t addr, uin
 		}
 
 		/* Check the card status */
+		retry = 0;
 		do
 		{
 			if (mmc_get_card_status(&dev->host, &dev->card, &status))
@@ -2377,14 +2378,17 @@ uint32_t mmc_set_clr_power_on_wp_user(struct mmc_device *dev, uint32_t addr, uin
 				return 1;
 			}
 
-		/* Time out for WP command */
-		retry++;
-		udelay(1000);
-		if (retry == MMC_MAX_CARD_STAT_RETRY)
-		{
-			dprintf(CRITICAL, "Card status timed out after sending write protect command\n");
-			return 1;
-		}
+			if (!(status & MMC_READY_FOR_DATA) || (MMC_CARD_STATUS(status) == MMC_PROG_STATE))
+			{
+				/* Time out for WP command - only delay if still busy */
+				retry++;
+				udelay(1000);
+				if (retry == MMC_MAX_CARD_STAT_RETRY)
+				{
+					dprintf(CRITICAL, "Card status timed out after sending write protect command\n");
+					return 1;
+				}
+			}
 		} while (!(status & MMC_READY_FOR_DATA) || (MMC_CARD_STATUS(status) == MMC_PROG_STATE));
 
 	}
