@@ -5091,6 +5091,7 @@ int splash_screen_mmc(void)
 	struct logo_img_header *header;
 	uint32_t blocksize, realsize, readsize;
 	uint8_t *base;
+	uint64_t hdr_offset = PLL_CODES_OFFSET;
 
 	index = partition_get_index("splash");
 	if (index == 0) {
@@ -5121,15 +5122,48 @@ int splash_screen_mmc(void)
 
 	base = (uint8_t *) fb_display->base;
 
-	if (mmc_read(ptn + PLL_CODES_OFFSET, (uint32_t *)(base + LOGO_IMG_OFFSET), blocksize)) {
+	if (mmc_read(ptn + hdr_offset, (uint32_t *)(base + LOGO_IMG_OFFSET), blocksize)) {
 		dprintf(CRITICAL, "ERROR: Cannot read splash image header\n");
 		return -1;
 	}
 
 	header = (struct logo_img_header *)(base + LOGO_IMG_OFFSET);
 	if (splash_screen_check_header(header)) {
-		dprintf(CRITICAL, "ERROR: Splash image header invalid\n");
-		return -1;
+		/*
+		 * New-format header (at PLL_CODES_OFFSET) didn't validate.
+		 * Retry at offset 0 in case this is an image generated
+		 * without PLL-codes padding (blocks/type unreliable there).
+		 */
+		hdr_offset = 0;
+
+		if (mmc_read(ptn + hdr_offset, (uint32_t *)(base + LOGO_IMG_OFFSET), blocksize)) {
+			dprintf(CRITICAL, "ERROR: Cannot read splash image header\n");
+			return -1;
+		}
+
+		header = (struct logo_img_header *)(base + LOGO_IMG_OFFSET);
+
+		if (memcmp(header->magic, LOGO_IMG_MAGIC, 8) != 0 ||
+			header->width == 0 || header->height == 0) {
+			dprintf(CRITICAL, "ERROR: Splash image header invalid\n");
+			return -1;
+		}
+
+		if ((header->width > fb_display->width) || (header->height > fb_display->height)) {
+			dprintf(CRITICAL, "Logo config greater than fb config. Fall back default logo\n");
+			return -1;
+		}
+
+		realsize = header->width * header->height * fb_display->bpp / 8;
+		readsize = ROUNDUP((realsize + LOGO_IMG_HEADER_SIZE), blocksize) - blocksize;
+
+		if (mmc_read(ptn + hdr_offset + LOGO_IMG_HEADER_SIZE, (uint32_t *)base, readsize)) {
+			fbcon_clear();
+			dprintf(CRITICAL, "ERROR: Cannot read splash image from partition\n");
+			return -1;
+		}
+
+		return 0;
 	}
 
 	if (fb_display) {
@@ -5157,7 +5191,7 @@ int splash_screen_mmc(void)
 				return -1;
 			}
 
-			if (mmc_read(ptn + PLL_CODES_OFFSET + blocksize, (uint32_t *)(base + blocksize), readsize)) {
+			if (mmc_read(ptn + hdr_offset + blocksize, (uint32_t *)(base + blocksize), readsize)) {
 				dprintf(CRITICAL, "ERROR: Cannot read splash image from partition\n");
 				return -1;
 			}
@@ -5178,13 +5212,13 @@ int splash_screen_mmc(void)
 			}
 
 			if (blocksize == LOGO_IMG_HEADER_SIZE) { /* read the content directly */
-				if (mmc_read((ptn + PLL_CODES_OFFSET + LOGO_IMG_HEADER_SIZE), (uint32_t *)base, readsize)) {
+				if (mmc_read((ptn + hdr_offset + LOGO_IMG_HEADER_SIZE), (uint32_t *)base, readsize)) {
 					fbcon_clear();
 					dprintf(CRITICAL, "ERROR: Cannot read splash image from partition\n");
 					return -1;
 				}
 			} else {
-				if (mmc_read(ptn + PLL_CODES_OFFSET + blocksize ,
+				if (mmc_read(ptn + hdr_offset + blocksize,
 						(uint32_t *)(base + LOGO_IMG_OFFSET + blocksize), readsize)) {
 					dprintf(CRITICAL, "ERROR: Cannot read splash image from partition\n");
 					return -1;
