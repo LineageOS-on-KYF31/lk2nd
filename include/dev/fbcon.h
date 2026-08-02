@@ -38,13 +38,14 @@
 #define LOGO_IMG_HEADER_SIZE 512
 
 /* 60 characters per line for portrait orientation
+ * "480 (W) 854 (H)" -- 480 /6/40 = 2
  * "560 (W) 960 (H)" -- 560 /6/60 = 1.5 = ~2
  * "720 (W) 1280(H)" -- 720 /6/60 = 2
  * "1080(W) 1920(H)" -- 1080/6/60 = 3
  * "1440(W) 2560(H)" -- 1440/6/60 = 4
  * "2160(W) 3840(H)" -- 2160/6/60 = 6
  */
-#define CHAR_NUM_PERROW_POR 60
+#define CHAR_NUM_PERROW_POR 40
 
 /* 106 characters per line for horizontal orientation
  * "480 (H) 640 (W)" -- 640 /6/106 = ~1
