@@ -46,6 +46,7 @@
 #include <i2c_qup.h>
 #include <blsp_qup.h>
 #include <mipi_dsi_i2c.h>
+#include "spmi.h"
 
 #include "target/led.h"
 
@@ -389,6 +390,17 @@ int target_panel_clock(uint8_t enable, struct msm_panel_info *pinfo)
 	return 0;
 }
 
+void target_tp_gpio_ctrl(int enable)
+{
+    dprintf(SPEW, "%s(%d)\n", __func__, enable);
+
+    if (enable) {
+        mdelay(1);
+        gpio_tlmm_config(18, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA, GPIO_DISABLE);
+        gpio_tlmm_config(19,   0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA, GPIO_DISABLE);
+    }
+}
+
 int target_panel_reset(uint8_t enable, struct panel_reset_sequence *resetseq,
 						struct msm_panel_info *pinfo)
 {
@@ -416,6 +428,7 @@ int target_panel_reset(uint8_t enable, struct panel_reset_sequence *resetseq,
 		enable_gpio.pin_id = 59;
 	}
 
+	target_tp_gpio_ctrl(enable);
 	if (enable) {
 		if (pinfo->mipi.use_enable_gpio) {
 			gpio_tlmm_config(enable_gpio.pin_id, 0,
@@ -449,12 +462,36 @@ int target_panel_reset(uint8_t enable, struct panel_reset_sequence *resetseq,
 	return ret;
 }
 
+#define TP_LDO_BASE  0xC300
+void target_tp_ldo_ctrl(int enable)
+{
+    dprintf(SPEW, "%s(%d)\n", __func__, enable);
+
+    if (enable) {
+        /* Disable LDO4 (Bit 7 of EN_CTL at 0xC346) before reconfiguring */
+        pmic_spmi_reg_mask_write(TP_LDO_BASE + 0x46, 0x80, 0x00);
+
+        /* Program Touch Panel LDO settings directly */
+        pmic_spmi_reg_write(TP_LDO_BASE + 0x40, 0x11); /* MODE: Active / Pin Control */
+        pmic_spmi_reg_write(TP_LDO_BASE + 0x42, 0x05); /* VSET_UB (Voltage Upper Byte) */
+        pmic_spmi_reg_write(TP_LDO_BASE + 0x41, 0x03); /* VSET_LB (Voltage Lower Byte) */
+        pmic_spmi_reg_write(TP_LDO_BASE + 0x45, 0x01); /* PIN_CTL: Hardware enable   */
+
+        /* Enable LDO4 output (Set Bit 7) */
+        pmic_spmi_reg_mask_write(TP_LDO_BASE + 0x46, 0x80, 0x80);
+    }
+
+    /* Allow Touch Panel power rail to stabilize */
+    mdelay(5);
+}
+
 int target_ldo_ctrl(uint8_t enable, struct msm_panel_info *pinfo)
 {
 	uint32_t hw_id = board_hardware_id();
 	uint32_t hw_subtype = board_hardware_subtype();
 	uint32_t platform = board_platform_id();
 
+	target_tp_ldo_ctrl(enable);
 	if (enable) {
 		if (((HW_PLATFORM_SUBTYPE_8909_PM660 == hw_subtype) ||
 			(HW_PLATFORM_SUBTYPE_8909_PM660_V1 == hw_subtype) ||
