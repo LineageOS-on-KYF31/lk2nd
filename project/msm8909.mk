@@ -135,3 +135,7 @@ endif
 
 #enable battery voltage check
 DEFINES += CHECK_BAT_VOLTAGE=1
+
+# Allow the target to append extra kernel cmdline args (target_update_cmdline).
+# Used for the Kyocera "panel_detect" arg that gates the DSI path on this kernel.
+DEFINES += TARGET_CMDLINE_SUPPORT=1

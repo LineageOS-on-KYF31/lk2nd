@@ -83,62 +83,58 @@ uint32_t gpio_status(uint32_t gpio)
 	return readl(GPIO_IN_OUT_ADDR(gpio)) & GPIO_IN;
 }
 
+/*
+ * Pinmux of the BLSP1 I2C controllers, taken from msm8909-pinctrl.dtsi
+ * (pmx_i2c_1 .. pmx_i2c_6).
+ *
+ * LK's QUP_ID_x is 0-based while the datasheet/DT numbers the controllers
+ * 1-based, so QUP_ID_0 is BLSP1 QUP1 (0x78b5000), QUP_ID_4 is BLSP1 QUP5
+ * (0x78b9000) and so on. Keep the two in sync.
+ */
 void gpio_config_blsp_i2c(uint8_t blsp_id, uint8_t qup_id)
 {
 	if(blsp_id == BLSP_ID_1) {
 		switch (qup_id) {
 			case QUP_ID_0:
-				/* configure I2C SDA gpio */
+				/* BLSP1 QUP1: SDA 6, SCL 7, func 3 */
 				gpio_tlmm_config(6, 3, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
-
-				/* configure I2C SCL gpio */
 				gpio_tlmm_config(7, 3, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
 			break;
 			case QUP_ID_1:
-				/* configure I2C SDA gpio */
-				gpio_tlmm_config(6, 3, GPIO_OUTPUT, GPIO_NO_PULL,
-					GPIO_8MA, GPIO_DISABLE);
-
-				/* configure I2C SCL gpio */
-				gpio_tlmm_config(7, 3, GPIO_OUTPUT, GPIO_NO_PULL,
-					GPIO_8MA, GPIO_DISABLE);
-			break;
-			case QUP_ID_2:
-				/* configure I2C SDA gpio */
+				/* BLSP1 QUP2: SDA 111, SCL 112, func 3 */
 				gpio_tlmm_config(111, 3, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
-
-				/* configure I2C SCL gpio */
 				gpio_tlmm_config(112, 3, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
 			break;
-			case QUP_ID_3:
-				/* configure I2C SDA gpio */
-				gpio_tlmm_config(29, 3, GPIO_OUTPUT, GPIO_NO_PULL,
+			case QUP_ID_2:
+				/* BLSP1 QUP3: SDA 29, SCL 30, func 1 */
+				gpio_tlmm_config(29, 1, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
-
-				/* configure I2C SCL gpio */
-				gpio_tlmm_config(30, 3, GPIO_OUTPUT, GPIO_NO_PULL,
+				gpio_tlmm_config(30, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+					GPIO_8MA, GPIO_DISABLE);
+			break;
+			case QUP_ID_3:
+				/* BLSP1 QUP4: SDA 14, SCL 15, func 2 */
+				gpio_tlmm_config(14, 2, GPIO_OUTPUT, GPIO_NO_PULL,
+					GPIO_8MA, GPIO_DISABLE);
+				gpio_tlmm_config(15, 2, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
 			break;
 			case QUP_ID_4:
-				/* configure I2C SDA gpio */
-				gpio_tlmm_config(14, 3, GPIO_OUTPUT, GPIO_NO_PULL,
+				/* BLSP1 QUP5: SDA 18, SCL 19, func 2 */
+				gpio_tlmm_config(18, 2, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
-
-				/* configure I2C SCL gpio */
-				gpio_tlmm_config(15, 3, GPIO_OUTPUT, GPIO_NO_PULL,
+				gpio_tlmm_config(19, 2, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
 			break;
 			case QUP_ID_5:
-				/* configure I2C SDA gpio */
-				gpio_tlmm_config(18, 3, GPIO_OUTPUT, GPIO_NO_PULL,
+				/* BLSP1 QUP6: SDA 10, SCL 11, func 2 */
+				gpio_tlmm_config(10, 2, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
-
-				/* configure I2C SCL gpio */
-				gpio_tlmm_config(19, 3, GPIO_OUTPUT, GPIO_NO_PULL,
+				gpio_tlmm_config(11, 2, GPIO_OUTPUT, GPIO_NO_PULL,
 					GPIO_8MA, GPIO_DISABLE);
 			break;
 

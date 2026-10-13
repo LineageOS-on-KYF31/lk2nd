@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include <skeleton32.dtsi>
+#include <lk2nd.dtsi>
+#include <dt-bindings/lk2nd/regulator.h>
+
+/ {
+	qcom,msm-id = <QCOM_ID_MSM8909 0>;
+	qcom,board-id = <QCOM_BOARD_ID_MTP 0x2>;
+};
+
+&lk2nd {
+		model = "Kyocera Gratina 4G (KYF39)";
+		compatible = "qcom,msm8909-mtp", "qcom,msm8909", "qcom,mtp", "kyocera,kyf39";
+		lk2nd,dtb-files = "msm8909-kyocera-kyf39";
+
+		panel {
+			compatible = "kc,djn2_fwvga_video", "lk2nd,panel";
+
+			qcom,mdss_dsi_kc_djn2_fwvga_video {
+				compatible = "kc,djn2_fwvga_video";
+			};
+		};
+
+		kc,lv5216-backlight {
+			compatible = "kc,lv5216-backlight";
+			i2c-reg = <0x74>;
+			/* BLSP1 QUP5, i2c@78b9000 */
+			i2c-sda-gpios = <&tlmm 18 GPIO_ACTIVE_HIGH>;
+			i2c-scl-gpios = <&tlmm 19 GPIO_ACTIVE_HIGH>;
+			kc,reset-gpios = <&tlmm 29 GPIO_ACTIVE_HIGH>;
+		};
+
+		regulator-l15 {
+			compatible = "regulator-ldo";
+			id = <REG_LDO15>;
+		};
+};

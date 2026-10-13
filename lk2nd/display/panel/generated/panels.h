@@ -21,6 +21,7 @@
 #include "lk_panel_tc7x_ili9881c_5p0inch_720p_video.h"
 #include "lk_panel_truly_qhd_video.h"
 #include "lk_panel_kc_jdi_fwvga_video.h"
+#include "lk_panel_kc_djn2_fwvga_video.h"
 
 int oem_panel_select(const char *panel_name, struct panel_struct *panel,
 		     struct msm_panel_info *pinfo, struct mdss_dsi_phy_ctrl *phy_db);

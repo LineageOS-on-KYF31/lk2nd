@@ -28,6 +28,7 @@
 
 #include <debug.h>
 #include <ctype.h>
+#include <err.h>
 #include <platform/iomap.h>
 #include <reg.h>
 #include <target.h>
@@ -377,19 +378,19 @@ int lv5216_set_led_rgb_mode(uint32_t enable, uint32_t color_mode)
         return ret;
     }
 
-    /* Send reset/off preamble cmd (turns off LED on and off based on enable bit) */
-    if (!lv5216_send(lv5216_init_buf, 1)) {
-        return -20;
-    }
+	/* Blank all channels first, then turn the requested ones on (or leave off) */
+	if (!lv5216_send(lv5216_init_buf, 1)) {
+		return -EIO;
+	}
 
-    /* If enabled, send the specific color register payload */
-    if (enable == 1) {
-        if (!lv5216_send(&lv5216_color_cmds[color_mode], 1)) {
-            return -20;
-        }
-    }
+	/* If enabled, send the specific color register payload */
+	if (enable == 1) {
+		if (!lv5216_send(&lv5216_color_cmds[color_mode], 1)) {
+			return -EIO;
+		}
+	}
 
-    return 0;
+	return 0;
 }
 
 void target_init(void)
@@ -720,6 +721,31 @@ int get_target_boot_params(const char *cmdline, const char *part, char **buf)
 unsigned target_baseband(void)
 {
 	return board_baseband();
+}
+
+/*
+ * TEST ONLY - extra kernel command line arguments for the Kyocera msm8909
+ * boards.
+ *
+ * On the older Kyocera kernel (kernel_KYF39_103.0.2050) the whole DSI path is
+ * gated on disp_ext_board_get_panel_detect(), which defaults to "panel not
+ * found" (-1) and only flips to "panel found" when the "panel_detect"
+ * parameter is on the kernel command line. Without it the kernel logs
+ * "panel not found" once and then bails out of every panel operation with
+ * "Panel not connected", so power_on/reset/on/cmds_tx never run.
+ *
+ * Newer Kyocera kernels replaced this with disp_ext_board_detect_board(),
+ * which does gpio_get_value(rst_gpio) plus a DSI read instead, so the
+ * argument becomes a harmless no-op there and can be dropped.
+ *
+ * This lives in target_update_cmdline() rather than target_display_panel_node()
+ * because the latter is skipped entirely when the boot image already carries
+ * an "mdss_mdp" prefix, which is the normal case for a stock boot image.
+ */
+int target_update_cmdline(char *cmdline)
+{
+	strlcpy(cmdline, " panel_detect=1", TARGET_MAX_CMDLNBUF);
+	return strlen(cmdline);
 }
 
 int emmc_recovery_init(void)

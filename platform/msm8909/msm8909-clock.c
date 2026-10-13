@@ -794,8 +794,17 @@ static struct clk_lookup msm_clocks_msm8909[] =
 	CLK_LOOKUP("ce1_core_clk", gcc_ce1_clk.c),
 	CLK_LOOKUP("ce1_src_clk",  ce1_clk_src.c),
 
-	CLK_LOOKUP("blsp1_qup2_ahb_iface_clk", gcc_blsp1_ahb_clk.c),
+	/*
+	 * clock_config_blsp_i2c() looks up "blsp1_qup<N>_ahb_iface_clk" (with N
+	 * being 1-based) and bails out if it is missing, so every QUP needs an
+	 * alias here. They all share the single BLSP1 AHB clock.
+	 */
 	CLK_LOOKUP("blsp1_qup1_ahb_iface_clk", gcc_blsp1_ahb_clk.c),
+	CLK_LOOKUP("blsp1_qup2_ahb_iface_clk", gcc_blsp1_ahb_clk.c),
+	CLK_LOOKUP("blsp1_qup3_ahb_iface_clk", gcc_blsp1_ahb_clk.c),
+	CLK_LOOKUP("blsp1_qup4_ahb_iface_clk", gcc_blsp1_ahb_clk.c),
+	CLK_LOOKUP("blsp1_qup5_ahb_iface_clk", gcc_blsp1_ahb_clk.c),
+	CLK_LOOKUP("blsp1_qup6_ahb_iface_clk", gcc_blsp1_ahb_clk.c),
 	CLK_LOOKUP("gcc_blsp1_qup1_i2c_apps_clk_src", gcc_blsp1_qup1_i2c_apps_clk_src.c),
 	CLK_LOOKUP("gcc_blsp1_qup1_i2c_apps_clk", gcc_blsp1_qup1_i2c_apps_clk.c),
 	CLK_LOOKUP("gcc_blsp1_qup2_i2c_apps_clk_src", gcc_blsp1_qup2_i2c_apps_clk_src.c),

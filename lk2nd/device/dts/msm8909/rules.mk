@@ -11,6 +11,7 @@ QCDTBS += \
 	$(LOCAL_DIR)/msm8909-mtp.dtb \
 	$(LOCAL_DIR)/msm8909-zte-sapphire.dtb \
 	$(LOCAL_DIR)/msm8909-kyocera-kyf31.dtb \
+	$(LOCAL_DIR)/msm8909-kyocera-kyf39.dtb \
 
 ADTBS += \
 	$(LOCAL_DIR)/apq8009w-wtp.dtb \

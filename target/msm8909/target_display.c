@@ -57,7 +57,7 @@
 #define VCO_DELAY_USEC 1000
 #define GPIO_STATE_LOW 0
 #define GPIO_STATE_HIGH 2
-#define RESET_GPIO_SEQ_LEN 3
+#define RESET_GPIO_SEQ_LEN 4
 #define PWM_DUTY_US 13
 #define PWM_PERIOD_US 27
 #define PM8916_VER 0x20000
@@ -67,7 +67,7 @@
 /*---------------------------------------------------------------------------*/
 /*pin_source, pin_id, pin_strength, pin_direction, pin_pull, pin_state*/
 static struct gpio_pin reset_gpio = {
-  "msmgpio", 2, 3, 1, 0, 1
+  "msmgpio", 30, 3, 1, 0, 1
 };
 
 static struct gpio_pin enable_gpio = {
@@ -219,25 +219,27 @@ static uint32_t dsi_pll_enable_seq_8909(uint32_t pll_base)
 }
 
 #define LV5216_I2C_SLAVE_ADDR   0x74
-#define BL_GPIO_EN              0   /* GPIO used to enable the backlight IC */
+#define LV5216_RESET_GPIO       29      /* kc,reset-gpio, active high */
+#define LV5216_I2C_BLSP         
+#define LV5216_I2C_QUP           /* BLSP1 QUP5 @ 0x78b9000 */
 
 static struct qup_i2c_dev *lv5216_i2c_dev = NULL;
 static uint8_t lv5216_initialized = 0;
 
 /* Register/value pairs written on init */
 struct lv5216_reg lv5216_init_regs[] = {
-    { 0x01, 0x00 }, { 0x02, 0x08 }, { 0x03, 0x48 }, { 0x06, 0x0A },
-    { 0x07, 0x08 }, { 0x08, 0x0A }, { 0x09, 0x9F }, { 0x0A, 0x02 },
-    { 0x0B, 0x80 }, { 0x0C, 0x00 }, { 0x0D, 0x00 }, { 0x0E, 0x00 },
-    { 0x0F, 0x00 }, { 0x10, 0x00 }, { 0x11, 0x00 }, { 0x12, 0x00 },
-    { 0x13, 0x00 }, { 0x14, 0x07 }, { 0x16, 0x07 }, { 0x17, 0x07 },
-    { 0x18, 0x07 }, { 0x19, 0x07 }, { 0x1A, 0x1F }, { 0x1B, 0x1F },
-    { 0x1C, 0x1F }, { 0x1D, 0x1F }, { 0x1E, 0x1F }, { 0x1F, 0x37 },
-    { 0x20, 0x47 }, { 0x21, 0x47 }, { 0x22, 0x67 }, { 0x23, 0x67 },
-    { 0x24, 0x67 }, { 0x25, 0x67 }, { 0x26, 0xAA }, { 0x27, 0xB8 },
-    { 0x00, 0x81 }  /* Power Reg */
+	{ 0x01, 0x00 }, { 0x02, 0x08 }, { 0x03, 0x48 }, { 0x06, 0x0A },
+	{ 0x07, 0x08 }, { 0x08, 0x0A }, { 0x09, 0x9F }, { 0x0A, 0x02 },
+	{ 0x0B, 0x80 }, { 0x0C, 0x00 }, { 0x0D, 0x00 }, { 0x0E, 0x00 },
+	{ 0x0F, 0x00 }, { 0x10, 0x00 }, { 0x11, 0x00 }, { 0x12, 0x00 },
+	{ 0x13, 0x00 }, { 0x14, 0x07 }, { 0x16, 0x07 }, { 0x17, 0x07 },
+	{ 0x18, 0x07 }, { 0x19, 0x07 }, { 0x1A, 0x1F }, { 0x1B, 0x1F },
+	{ 0x1C, 0x1F }, { 0x1D, 0x1F }, { 0x1E, 0x1F }, { 0x1F, 0x37 },
+	{ 0x20, 0x47 }, { 0x21, 0x47 }, { 0x22, 0x67 }, { 0x23, 0x67 },
+	{ 0x24, 0x67 }, { 0x25, 0x67 }, { 0x26, 0xAA }, { 0x27, 0xB8 },
+	{ 0x00, 0x81 }  /* Power Reg */
 };
-#define LV5216_INIT_COUNT (sizeof(lv5216_init_regs) / sizeof(lv5216_init_regs[0]))
+#define LV5216_INIT_COUNT ARRAY_SIZE(lv5216_init_regs)
 
 struct lv5216_reg lv5216_backlight_on[]  = { { 0x01, 0x1F } };
 struct lv5216_reg lv5216_backlight_off[] = { { 0x01, 0x00 } };
@@ -275,27 +277,32 @@ int lv5216_send(struct lv5216_reg *buf, int count)
             return 0;
     }
 
-    return 1;
+	return 1;
 }
 
 int lv5216_init(void)
 {
-    if (lv5216_initialized)
-        return 0;
+	if (lv5216_initialized)
+		return 0;
 
-    gpio_tlmm_config(0, 0, 1, 0, 0, 1);
-    gpio_set(0, 0);
-    udelay(50);
-    gpio_set(0, 2);
-    udelay(50);
+	/* Hardware reset, L -> H, matching lv5216_init_client() in the kernel driver */
+	gpio_tlmm_config(LV5216_RESET_GPIO, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+					 GPIO_2MA, GPIO_DISABLE);
+	gpio_set(LV5216_RESET_GPIO, GPIO_STATE_LOW);
+	udelay(30);
+	gpio_set(LV5216_RESET_GPIO, GPIO_STATE_HIGH);
+	udelay(30);
 
-    if (!lv5216_i2c_dev) {
-        lv5216_i2c_dev = qup_blsp_i2c_init(BLSP_ID_1, QUP_ID_0,
-                                            340000,
-                                            19200000);
-        if (lv5216_i2c_dev == NULL)
-            return -1;
-    }
+	if (!lv5216_i2c_dev) {
+		/* 340 kHz / 19.2 MHz, matching i2c_5 in msm8909.dtsi */
+		lv5216_i2c_dev = qup_blsp_i2c_init(BLSP_ID_1, QUP_ID_4,
+						   340000, 19200000);
+		if (lv5216_i2c_dev == NULL) {
+			dprintf(CRITICAL, "lv5216: failed to init BLSP%d QUP%d i2c\n",
+				BLSP_ID_1, QUP_ID_4);
+			return -1;
+		}
+	}
 
     if (!lv5216_send(lv5216_init_regs, LV5216_INIT_COUNT))
         return -1;
@@ -396,8 +403,9 @@ void target_tp_gpio_ctrl(int enable)
 
     if (enable) {
         mdelay(1);
-        gpio_tlmm_config(18, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA, GPIO_DISABLE);
-        gpio_tlmm_config(19,   0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA, GPIO_DISABLE);
+		//For KYF39 these are i2c pins, don't reconfigure them
+        //gpio_tlmm_config(18, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA, GPIO_DISABLE);
+        //gpio_tlmm_config(19,   0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA, GPIO_DISABLE);
     }
 }
 
